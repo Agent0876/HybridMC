@@ -1,17 +1,12 @@
 {
-  "plan": ".asw/plans/t0_9_bootstrap_shutdown.md",
-  "activeTask": "done",
+  "plan": ".asw/plans/t1_milestone_1.md",
+  "activeTask": "Task T1.J2: Handshake + Status (Server List Ping)",
   "completed": [
-    "Task 1: Create RegistryManager and register/freeze integration",
-    "Task 2: Implement graceful shutdown in Main.kt",
-    "Final Verification Wave"
+    "Task T1.J1: Netty Server + Framing"
   ],
   "artifacts": [
-    "/Users/shinseungmin/HybridMC/registry/src/main/kotlin/io/hybridmc/registry/RegistryManager.kt",
-    "/Users/shinseungmin/HybridMC/registry/src/test/kotlin/io/hybridmc/registry/RegistryManagerTest.kt",
-    "/Users/shinseungmin/HybridMC/core/src/main/kotlin/io/hybridmc/core/registry/RegistryFreezer.kt",
-    "/Users/shinseungmin/HybridMC/server/src/main/kotlin/io/hybridmc/server/Server.kt",
-    "/Users/shinseungmin/HybridMC/app/src/main/kotlin/io/hybridmc/app/Main.kt"
+    "/Users/shinseungmin/HybridMC/protocol-java/src/main/kotlin/io/hybridmc/protocol/java/JavaServer.kt",
+    "/Users/shinseungmin/HybridMC/protocol-java/src/test/kotlin/io/hybridmc/protocol/java/JavaServerTest.kt"
   ],
   "cleanup": [],
   "blockers": []
