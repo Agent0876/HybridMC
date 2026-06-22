@@ -1,10 +1,5 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    application
-}
-
-kotlin {
-    jvmToolchain(21)
+    id("hybridmc.kotlin-application")
 }
 
 dependencies {
@@ -12,20 +7,17 @@ dependencies {
     implementation(project(":plugin-host"))
     implementation(project(":network"))
 
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlin.logging)
-    implementation(libs.slf4j.api)
-    runtimeOnly(libs.logback.classic)
+    // Composition root: the only place that depends on every concrete domain module
+    // so it can register their subsystems into the server.
+    implementation(project(":registry"))
+    implementation(project(":world"))
+    implementation(project(":worldgen"))
+    implementation(project(":entity"))
+    implementation(project(":game"))
 
-    testImplementation(kotlin("test"))
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher)
+    runtimeOnly(libs.logback.classic)
 }
 
 application {
     mainClass.set("io.hybridmc.app.MainKt")
-}
-
-tasks.test {
-    useJUnitPlatform()
 }

@@ -1,31 +1,11 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-}
-
-kotlin {
-    jvmToolchain(21)
+    id("hybridmc.kotlin-library")
 }
 
 dependencies {
-    // The server wires every domain module together behind the tick loop.
-    implementation(project(":core"))
-    implementation(project(":registry"))
-    implementation(project(":network"))
-    implementation(project(":world"))
-    implementation(project(":worldgen"))
-    implementation(project(":entity"))
-    implementation(project(":game"))
+    // The server only knows the Subsystem SPI (in :core) and infrastructure — never the
+    // concrete domain modules. The composition root (:app) wires those in.
+    api(project(":core"))
     implementation(project(":api"))
-
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlin.logging)
-    implementation(libs.slf4j.api)
-
-    testImplementation(kotlin("test"))
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher)
-}
-
-tasks.test {
-    useJUnitPlatform()
+    implementation(project(":network"))
 }

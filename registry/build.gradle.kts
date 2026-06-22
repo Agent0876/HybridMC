@@ -1,26 +1,10 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    // Used by the build-time data pipeline that turns public datasets into registries.
-    alias(libs.plugins.kotlin.serialization)
-}
-
-kotlin {
-    jvmToolchain(21)
+    id("hybridmc.kotlin-library")
+    // Build-time data pipeline that turns public datasets into registries.
+    id("hybridmc.kotlin-serialization")
 }
 
 dependencies {
-    implementation(project(":core"))
+    api(project(":core"))
     implementation(libs.kotlinx.serialization.json)
-
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlin.logging)
-    implementation(libs.slf4j.api)
-
-    testImplementation(kotlin("test"))
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher)
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
