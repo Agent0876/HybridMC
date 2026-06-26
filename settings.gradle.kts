@@ -7,3 +7,10 @@
  */
 
 rootProject.name = "HybridMC"
+
+include(
+    "server-core",
+    "server-java",
+    "server-bedrock",
+    "server-app"
+)
