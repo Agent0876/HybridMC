@@ -14,8 +14,8 @@ import io.github.agent0876.hybridmc.core.player.PlayerRegistry
  */
 object MotdBuilder {
 
-    private const val PROTOCOL_VERSION = 1001     // MCPE protocol for 1.20.x
-    private const val GAME_VERSION     = "26.32"
+    private const val PROTOCOL_VERSION = 1001     // MCPE protocol for 1.26.32
+    private const val GAME_VERSION     = "1.26.32"
     private const val MAX_PLAYERS      = 200
     private const val IPV4_PORT        = 19132
     private const val IPV6_PORT        = 19133

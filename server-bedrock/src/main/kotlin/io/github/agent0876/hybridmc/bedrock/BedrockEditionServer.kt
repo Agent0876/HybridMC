@@ -4,9 +4,10 @@ import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.world.GameWorld
 import io.github.agent0876.hybridmc.core.ServerLifecycle
 import io.github.agent0876.raknetty.transport.RakNetServerBootstrap
-import io.netty.channel.ChannelFuture
-import io.netty.channel.MultiThreadIoEventLoopGroup
-import io.netty.channel.nio.NioIoHandler
+import io.netty5.channel.Channel
+import io.netty5.channel.MultithreadEventLoopGroup
+import io.netty5.channel.nio.NioHandler
+import io.netty5.util.concurrent.Future
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
@@ -14,9 +15,6 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.random.Random
 
-/**
- * Bedrock Edition server — listens on UDP port 19132 using RakNetty.
- */
 class BedrockEditionServer(
     private val registry: PlayerRegistry,
     private val world: GameWorld,
@@ -27,10 +25,10 @@ class BedrockEditionServer(
 
     private val logger = LoggerFactory.getLogger(BedrockEditionServer::class.java)
 
-    private val group = MultiThreadIoEventLoopGroup(0, NioIoHandler.newFactory())
+    private val group = MultithreadEventLoopGroup(0, NioHandler.newFactory())
     private val serverGuid = Random.nextLong()
 
-    private var channelFuture: ChannelFuture? = null
+    private var bindFuture: Future<Channel>? = null
 
     override suspend fun start(): Unit = suspendCancellableCoroutine { cont ->
         try {
@@ -50,9 +48,9 @@ class BedrockEditionServer(
                 .handler(BedrockPacketHandler(registry, world))
 
             val future = bootstrap.bind(InetSocketAddress(host, port))
-            channelFuture = future
+            bindFuture = future
 
-            future.addListener { f ->
+            future.addListener(io.netty5.util.concurrent.FutureListener { f ->
                 if (f.isSuccess) {
                     logger.info("Bedrock Edition server (RakNet) listening on {}:{}", host, port)
                     cont.resume(Unit)
@@ -60,7 +58,7 @@ class BedrockEditionServer(
                     logger.error("Bedrock Edition server failed to bind on {}:{}", host, port, f.cause())
                     cont.resumeWithException(f.cause())
                 }
-            }
+            })
 
             cont.invokeOnCancellation { stop() }
         } catch (e: Exception) {

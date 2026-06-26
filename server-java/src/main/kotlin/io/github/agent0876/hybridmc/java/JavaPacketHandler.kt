@@ -2,39 +2,20 @@ package io.github.agent0876.hybridmc.java
 
 import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.world.GameWorld
-import io.netty.buffer.ByteBuf
-import io.netty.buffer.Unpooled
-import io.netty.channel.ChannelFutureListener
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty5.buffer.Buffer
+import io.netty5.channel.ChannelHandlerContext
+import io.netty5.channel.SimpleChannelInboundHandler
+import io.netty5.util.concurrent.FutureListener
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-/**
- * Handles the Minecraft Java Edition protocol handshake and login flow.
- *
- * ## State machine
- * ```
- * HANDSHAKING ──(0x00 Handshake, nextState=1)──► STATUS
- *             ──(0x00 Handshake, nextState=2)──► LOGIN
- * STATUS      ──(0x00 Status Request)───────────► [send 0x00 Status Response, wait ping]
- *             ──(0x01 Ping Request)────────────► [echo pong, close]
- * LOGIN       ──(0x00 Login Start)──────────────► [send 0x02 Login Success, join]
- * ```
- *
- * Packet encoding follows the vanilla 1.20.x protocol specification.
- * VarInt reads/writes are handled by [readVarInt]/[writeVarInt] helpers below.
- *
- * @see <a href="https://wiki.vg/Protocol">wiki.vg/Protocol</a>
- */
-@Suppress("MagicNumber")
 class JavaPacketHandler(
     private val registry: PlayerRegistry,
     private val world: GameWorld,
     private val motd: String,
     private val maxPlayers: Int,
-) : ChannelInboundHandlerAdapter() {
+) : SimpleChannelInboundHandler<Buffer>() {
 
     private val logger = LoggerFactory.getLogger(JavaPacketHandler::class.java)
 
@@ -43,17 +24,8 @@ class JavaPacketHandler(
     private var state = State.HANDSHAKING
     private var session: JavaPlayerSession? = null
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Netty overrides
-    // ──────────────────────────────────────────────────────────────────────────
-
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        if (msg !is ByteBuf) return
-        try {
-            handleRawBytes(ctx, msg)
-        } finally {
-            msg.release()
-        }
+    override fun messageReceived(ctx: ChannelHandlerContext, msg: Buffer) {
+        handleRawBytes(ctx, msg)
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
@@ -61,55 +33,46 @@ class JavaPacketHandler(
         super.channelInactive(ctx)
     }
 
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+    override fun channelExceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.warn("Java connection error from {}: {}", ctx.channel().remoteAddress(), cause.message)
         ctx.close()
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // State machine
-    // ──────────────────────────────────────────────────────────────────────────
-
-    private fun handleRawBytes(ctx: ChannelHandlerContext, buf: ByteBuf) {
-        // Minecraft Java packets: [ VarInt length ] [ VarInt packetId ] [ payload … ]
-        // TCP may fragment, so we buffer until we have a full packet.
+    private fun handleRawBytes(ctx: ChannelHandlerContext, buf: Buffer) {
         while (buf.readableBytes() > 0) {
-            buf.markReaderIndex()
+            val savedOffset = buf.readerOffset()
 
-            // Read packet length
             val length = buf.readVarIntOrNull() ?: run {
-                buf.resetReaderIndex()
+                buf.readerOffset(savedOffset)
                 return
             }
             if (buf.readableBytes() < length) {
-                buf.resetReaderIndex()
+                buf.readerOffset(savedOffset)
                 return
             }
 
-            val packet = buf.readSlice(length)
-            val packetId = packet.readVarInt()
+            val packet = buf.readSplit(length)
+            val packetId = packet.readUnsignedVarInt()
 
             when (state) {
                 State.HANDSHAKING -> handleHandshake(ctx, packetId, packet)
                 State.STATUS      -> handleStatus(ctx, packetId, packet)
                 State.LOGIN       -> handleLogin(ctx, packetId, packet)
             }
+            packet.close()
         }
     }
 
-    // ── HANDSHAKING ───────────────────────────────────────────────────────────
-
-    private fun handleHandshake(ctx: ChannelHandlerContext, packetId: Int, data: ByteBuf) {
+    private fun handleHandshake(ctx: ChannelHandlerContext, packetId: Int, data: Buffer) {
         if (packetId != 0x00) {
             logger.warn("Unexpected packet 0x{} during HANDSHAKING from {}", packetId.toString(16), ctx.channel().remoteAddress())
             ctx.close()
             return
         }
-        // 0x00 Handshake: protocolVersion(VarInt) serverAddress(String) serverPort(UShort) nextState(VarInt)
-        data.readVarInt()           // protocolVersion (ignored at skeleton level)
-        data.readString()           // serverAddress
-        data.readShort()            // serverPort
-        val nextState = data.readVarInt()
+        data.readUnsignedVarInt()
+        data.readMcString()
+        data.readShort()
+        val nextState = data.readUnsignedVarInt()
 
         state = when (nextState) {
             1    -> State.STATUS
@@ -120,12 +83,10 @@ class JavaPacketHandler(
                 return
             }
         }
-        logger.debug("Handshake from {} → state={}", ctx.channel().remoteAddress(), state)
+        logger.debug("Handshake from {} -> state={}", ctx.channel().remoteAddress(), state)
     }
 
-    // ── STATUS ────────────────────────────────────────────────────────────────
-
-    private fun handleStatus(ctx: ChannelHandlerContext, packetId: Int, data: ByteBuf) {
+    private fun handleStatus(ctx: ChannelHandlerContext, packetId: Int, data: Buffer) {
         when (packetId) {
             0x00 -> sendStatusResponse(ctx)
             0x01 -> sendPong(ctx, data)
@@ -134,7 +95,6 @@ class JavaPacketHandler(
     }
 
     private fun sendStatusResponse(ctx: ChannelHandlerContext) {
-        // JSON formatted per https://wiki.vg/Server_List_Ping#Response
         val online = registry.onlineCount
         val json = """
             {
@@ -146,46 +106,41 @@ class JavaPacketHandler(
         """.trimIndent()
 
         writePacket(ctx, 0x00) { buf ->
-            buf.writeString(json)
+            buf.writeMcString(json)
         }
         logger.debug("Sent Status Response to {}", ctx.channel().remoteAddress())
     }
 
-    private fun sendPong(ctx: ChannelHandlerContext, data: ByteBuf) {
+    private fun sendPong(ctx: ChannelHandlerContext, data: Buffer) {
         val payload = data.readLong()
         writePacket(ctx, 0x01) { buf -> buf.writeLong(payload) }
-        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+        ctx.writeAndFlush(ctx.bufferAllocator().allocate(0)).addListener(FutureListener { ctx.close() })
     }
 
-    // ── LOGIN ─────────────────────────────────────────────────────────────────
-
-    private fun handleLogin(ctx: ChannelHandlerContext, packetId: Int, data: ByteBuf) {
+    private fun handleLogin(ctx: ChannelHandlerContext, packetId: Int, data: Buffer) {
         when (packetId) {
             0x00 -> handleLoginStart(ctx, data)
             else -> logger.warn("Unknown LOGIN packet 0x{}", packetId.toString(16))
         }
     }
 
-    private fun handleLoginStart(ctx: ChannelHandlerContext, data: ByteBuf) {
-        // 0x00 Login Start: name(String) uuid(UUID — optional in older versions)
-        val name = data.readString()
+    private fun handleLoginStart(ctx: ChannelHandlerContext, data: Buffer) {
+        val name = data.readMcString()
         val uuid = if (data.readableBytes() >= 16) {
             val high = data.readLong()
             val low  = data.readLong()
             UUID(high, low)
         } else {
-            // Offline-mode UUID based on username
             UUID.nameUUIDFromBytes("OfflinePlayer:$name".toByteArray(StandardCharsets.UTF_8))
         }
 
         logger.info("Login Start: name={} uuid={} from {}", name, uuid, ctx.channel().remoteAddress())
 
-        // ── Send 0x02 Login Success ────────────────────────────────────────────
         writePacket(ctx, 0x02) { buf ->
             buf.writeLong(uuid.mostSignificantBits)
             buf.writeLong(uuid.leastSignificantBits)
-            buf.writeString(name)
-            buf.writeVarInt(0) // number of properties
+            buf.writeMcString(name)
+            buf.writeUnsignedVarInt(0)
         }
 
         val sess = JavaPlayerSession(ctx, uuid, name, registry)
@@ -193,38 +148,30 @@ class JavaPacketHandler(
         registry.join(sess)
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Packet helpers
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Writes a full Minecraft packet: [ length VarInt ][ packetId VarInt ][ body ].
-     */
-    private fun writePacket(ctx: ChannelHandlerContext, packetId: Int, body: (ByteBuf) -> Unit) {
-        val bodyBuf = ctx.alloc().buffer()
+    private fun writePacket(ctx: ChannelHandlerContext, packetId: Int, body: (Buffer) -> Unit) {
+        val alloc = ctx.bufferAllocator()
+        val bodyBuf = alloc.allocate(64)
         try {
-            bodyBuf.writeVarInt(packetId)
+            bodyBuf.writeUnsignedVarInt(packetId)
             body(bodyBuf)
 
-            val out = ctx.alloc().buffer()
-            out.writeVarInt(bodyBuf.readableBytes())
-            out.writeBytes(bodyBuf)
+            val out = alloc.allocate(bodyBuf.readableBytes() + 5)
+            out.writeUnsignedVarInt(bodyBuf.readableBytes())
+            out.writeBytes(bodyBuf.copy())
             ctx.writeAndFlush(out)
         } finally {
-            bodyBuf.release()
+            bodyBuf.close()
         }
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// ByteBuf extension helpers — VarInt and String encoding per wiki.vg
-// ────────────────────────────────────────────────────────────────────────────
+// -- Buffer extension helpers --
 
-internal fun ByteBuf.readVarInt(): Int {
+private fun Buffer.readUnsignedVarInt(): Int {
     var result = 0
     var shift = 0
     while (true) {
-        val b = readByte().toInt()
+        val b = readUnsignedByte()
         result = result or ((b and 0x7F) shl shift)
         if (b and 0x80 == 0) return result
         shift += 7
@@ -232,38 +179,39 @@ internal fun ByteBuf.readVarInt(): Int {
     }
 }
 
-internal fun ByteBuf.readVarIntOrNull(): Int? {
-    if (!isReadable) return null
+private fun Buffer.readVarIntOrNull(): Int? {
+    if (readableBytes() == 0) return null
+    val savedOffset = readerOffset()
     var result = 0
     var shift = 0
     while (true) {
-        if (!isReadable) return null
-        val b = readByte().toInt()
+        if (readableBytes() == 0) { readerOffset(savedOffset); return null }
+        val b = readUnsignedByte()
         result = result or ((b and 0x7F) shl shift)
         if (b and 0x80 == 0) return result
         shift += 7
-        if (shift >= 32) return null
+        if (shift >= 32) { readerOffset(savedOffset); return null }
     }
 }
 
-internal fun ByteBuf.writeVarInt(value: Int) {
+private fun Buffer.writeUnsignedVarInt(value: Int) {
     var v = value
     while (true) {
-        if (v and 0x7F.inv() == 0) { writeByte(v); return }
-        writeByte((v and 0x7F) or 0x80)
+        if (v and 0x7F.inv() == 0) { writeUnsignedByte(v); return }
+        writeUnsignedByte((v and 0x7F) or 0x80)
         v = v ushr 7
     }
 }
 
-internal fun ByteBuf.readString(): String {
-    val length = readVarInt()
+private fun Buffer.readMcString(): String {
+    val length = readUnsignedVarInt()
     val bytes = ByteArray(length)
-    readBytes(bytes)
+    readBytes(bytes, 0, length)
     return String(bytes, StandardCharsets.UTF_8)
 }
 
-internal fun ByteBuf.writeString(value: String) {
+private fun Buffer.writeMcString(value: String) {
     val bytes = value.toByteArray(StandardCharsets.UTF_8)
-    writeVarInt(bytes.size)
+    writeUnsignedVarInt(bytes.size)
     writeBytes(bytes)
 }

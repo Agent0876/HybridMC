@@ -1,7 +1,7 @@
 [versions]
 kotlin     = "2.4.0"
-netty      = "4.2.15.Final"
-raknetty   = "0.1.0"
+netty      = "5.0.0.Alpha5"
+raknetty   = "1.0.0"
 logback    = "1.5.18"
 coroutines = "1.10.2"
 
@@ -13,11 +13,11 @@ kotlin-stdlib        = { module = "org.jetbrains.kotlin:kotlin-stdlib",        v
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "coroutines" }
 
-# Netty (Java Edition TCP)
-netty-transport      = { module = "io.netty:netty-transport",                  version.ref = "netty" }
-netty-handler        = { module = "io.netty:netty-handler",                    version.ref = "netty" }
-netty-codec          = { module = "io.netty:netty-codec",                      version.ref = "netty" }
-netty-buffer         = { module = "io.netty:netty-buffer",                     version.ref = "netty" }
+# Netty5 (Java Edition TCP)
+netty-transport      = { module = "io.netty:netty5-transport",                 version.ref = "netty" }
+netty-handler        = { module = "io.netty:netty5-handler",                   version.ref = "netty" }
+netty-codec          = { module = "io.netty:netty5-codec",                     version.ref = "netty" }
+netty-buffer         = { module = "io.netty:netty5-buffer",                    version.ref = "netty" }
 
 # RakNetty (Bedrock Edition UDP/RakNet)
 raknetty-transport   = { module = "io.github.agent0876.raknetty:raknetty-transport", version.ref = "raknetty" }
