@@ -138,7 +138,7 @@ class JavaPacketHandler(
         val online = registry.onlineCount
         val json = """
             {
-              "version": { "name": "HybridMC 1.20.4", "protocol": 765 },
+              "version": { "name": "HybridMC 26.2", "protocol": 776 },
               "players": { "max": $maxPlayers, "online": $online, "sample": [] },
               "description": { "text": "$motd" },
               "enforcesSecureChat": false

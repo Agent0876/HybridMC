@@ -21,8 +21,8 @@ import java.util.concurrent.ConcurrentHashMap
  * A [BedrockPlayerSession] is created per connection and keyed by the connection's
  * remote address string for O(1) lookup.
  *
- * The 0xFE "game packet wrapper" byte present in all MCPE game packets is stripped
- * here before delegating to [BedrockPlayerSession.handlePayload].
+ * The raw RakNet payload is forwarded as-is to [BedrockPlayerSession.handlePayload];
+ * all batch decompression and inner-packet parsing happens inside the session.
  */
 class BedrockPacketHandler(
     private val registry: PlayerRegistry,
@@ -44,10 +44,7 @@ class BedrockPacketHandler(
     }
 
     /**
-     * Dispatches an incoming game payload to the correct [BedrockPlayerSession].
-     *
-     * MCPE wraps all game packets in a 0xFE byte at the front of every RakNet
-     * reliable message. We strip that byte before forwarding to the session.
+     * Dispatches an incoming RakNet payload to the correct [BedrockPlayerSession].
      *
      * [payload] is owned by this call — do NOT release it manually.
      */
@@ -56,11 +53,6 @@ class BedrockPacketHandler(
         val session = sessions[key] ?: run {
             logger.warn("[BEDROCK] Message from unknown connection {}", connection.remoteAddress)
             return
-        }
-
-        // Strip the MCPE game-packet wrapper byte (0xFE)
-        if (payload.isReadable && payload.getByte(payload.readerIndex()) == 0xFE.toByte()) {
-            payload.skipBytes(1)
         }
 
         session.handlePayload(payload)
