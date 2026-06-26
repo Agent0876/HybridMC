@@ -10,17 +10,17 @@ fun main() {
 
     val server = HybridServer()
 
-    server.javaServer = JavaEditionServer(
+    server.install(JavaEditionServer(
         registry = server.playerRegistry,
         world = server.world,
         host = config.java.host,
         port = config.java.port,
         maxPlayers = config.java.maxPlayers,
         motd = config.java.motd,
-    )
+    ))
 
     if (config.bedrock.enabled) {
-        server.bedrockServer = BedrockEditionServer(
+        server.install(BedrockEditionServer(
             registry = server.playerRegistry,
             world = server.world,
             host = config.bedrock.host,
@@ -28,7 +28,7 @@ fun main() {
             maxConnections = config.bedrock.maxConnections,
             description = config.bedrock.description,
             gameMode = config.world.gamemode.replaceFirstChar { it.uppercase() },
-        )
+        ))
     }
 
     server.start()

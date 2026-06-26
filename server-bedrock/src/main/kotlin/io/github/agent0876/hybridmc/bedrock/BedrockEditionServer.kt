@@ -3,6 +3,7 @@ package io.github.agent0876.hybridmc.bedrock
 import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.world.GameWorld
 import io.github.agent0876.hybridmc.core.ServerLifecycle
+import io.github.agent0876.hybridmc.core.player.Edition
 import io.github.agent0876.raknetty.transport.RakNetServerBootstrap
 import io.netty5.channel.Channel
 import io.netty5.channel.MultithreadEventLoopGroup
@@ -25,6 +26,7 @@ class BedrockEditionServer(
     private val gameMode: String = "Survival",
 ) : ServerLifecycle {
 
+    override val edition: Edition = Edition.BEDROCK
     private val logger = LoggerFactory.getLogger(BedrockEditionServer::class.java)
 
     private val group = MultithreadEventLoopGroup(0, NioHandler.newFactory())

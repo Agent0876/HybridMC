@@ -3,6 +3,7 @@ package io.github.agent0876.hybridmc.java
 import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.world.GameWorld
 import io.github.agent0876.hybridmc.core.ServerLifecycle
+import io.github.agent0876.hybridmc.core.player.Edition
 import io.netty5.bootstrap.ServerBootstrap
 import io.netty5.channel.ChannelInitializer
 import io.netty5.channel.ChannelOption
@@ -30,6 +31,7 @@ class JavaEditionServer(
     private val motd: String = "§aHybridMC §7— Java + Bedrock",
 ) : ServerLifecycle {
 
+    override val edition: Edition = Edition.JAVA
     private val logger = LoggerFactory.getLogger(JavaEditionServer::class.java)
 
     private val bossGroup = MultithreadEventLoopGroup(1, NioHandler.newFactory())

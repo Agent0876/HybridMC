@@ -1,5 +1,6 @@
 package io.github.agent0876.hybridmc.core
 
+import io.github.agent0876.hybridmc.core.player.Edition
 import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.world.GameWorld
 import kotlinx.coroutines.CoroutineScope
@@ -12,16 +13,15 @@ import org.slf4j.LoggerFactory
 
 /**
  * Top-level server that manages [playerRegistry] and [world], and coordinates
- * the Java Edition and Bedrock Edition sub-servers.
+ * one or more edition-specific sub-servers (Java, Bedrock, etc.).
  *
  * Usage:
  * ```kotlin
  * val server = HybridServer()
+ * server.install(JavaEditionServer(...))
+ * server.install(BedrockEditionServer(...))
  * server.start()
  * ```
- *
- * The caller registers a shutdown hook or calls [stop] explicitly to cleanly
- * shut down both protocol stacks.
  */
 class HybridServer(
     val playerRegistry: PlayerRegistry = PlayerRegistry(),
@@ -30,33 +30,28 @@ class HybridServer(
 
     val world: GameWorld = GameWorld(registry = playerRegistry)
 
-    /**
-     * Supplier that provides the Java sub-server.
-     * Set by the application entry-point after injecting shared context.
-     */
-    var javaServer: ServerLifecycle? = null
-
-    /**
-     * Supplier that provides the Bedrock sub-server.
-     * Set by the application entry-point after injecting shared context.
-     */
-    var bedrockServer: ServerLifecycle? = null
-
+    private val servers = mutableListOf<ServerLifecycle>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Starts both edition servers concurrently, then blocks until [stop] is called. */
+    /** Registers an edition sub-server. Must be called before [start]. */
+    fun install(server: ServerLifecycle) {
+        servers.add(server)
+    }
+
+    /** All registered edition servers. */
+    fun installed(): List<ServerLifecycle> = servers.toList()
+
+    /** Starts all edition servers concurrently, then blocks until [stop] is called. */
     fun start() {
+        val editions = servers.map { it.edition.displayName }
         logger.info("==============================================")
-        logger.info("  HybridMC — Java + Bedrock Hybrid Server")
+        logger.info("  HybridMC — {}", editions.joinToString(" + "))
         logger.info("==============================================")
 
-        val java    = requireNotNull(javaServer)    { "javaServer must be set before start()" }
-        val bedrock = requireNotNull(bedrockServer) { "bedrockServer must be set before start()" }
+        servers.forEach { server ->
+            scope.launch { server.start() }
+        }
 
-        scope.launch { java.start() }
-        scope.launch { bedrock.start() }
-
-        // Register JVM shutdown hook for graceful cleanup
         Runtime.getRuntime().addShutdownHook(Thread({
             logger.info("Shutdown signal received — stopping HybridMC…")
             stop()
@@ -64,22 +59,20 @@ class HybridServer(
 
         logger.info("HybridMC is running. Press Ctrl+C to stop.")
 
-        // Block the main thread until scope is cancelled
         runBlocking { scope.coroutineContext[kotlinx.coroutines.Job]!!.join() }
     }
 
-    /** Gracefully stops both servers and cancels all coroutines. */
+    /** Gracefully stops all servers and cancels coroutines. */
     fun stop() {
         world.broadcastMessage("§cServer is shutting down…")
-        javaServer?.stop()
-        bedrockServer?.stop()
+        servers.forEach { it.stop() }
         scope.cancel()
         logger.info("HybridMC stopped.")
     }
 }
 
-/** Minimal lifecycle contract implemented by [JavaEditionServer] and [BedrockEditionServer]. */
 interface ServerLifecycle {
+    val edition: Edition
     suspend fun start()
     fun stop()
 }

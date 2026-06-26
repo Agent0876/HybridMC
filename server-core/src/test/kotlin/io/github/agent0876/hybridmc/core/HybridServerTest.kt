@@ -1,12 +1,12 @@
 package io.github.agent0876.hybridmc.core
 
+import io.github.agent0876.hybridmc.core.player.Edition
 import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.player.TestPlayer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlin.test.assertFailsWith
 
 class HybridServerTest {
 
@@ -19,46 +19,50 @@ class HybridServerTest {
     }
 
     @Test
-    fun `start throws if javaServer is not set`() {
+    fun `install adds server`() {
         val server = HybridServer()
-        server.bedrockServer = FakeServerLifecycle()
-        assertFailsWith<IllegalArgumentException> { server.start() }
+        val fake = FakeServerLifecycle()
+        server.install(fake)
+        assertEquals(1, server.installed().size)
+        assertEquals(fake, server.installed().single())
     }
 
     @Test
-    fun `start throws if bedrockServer is not set`() {
-        val server = HybridServer()
-        server.javaServer = FakeServerLifecycle()
-        assertFailsWith<IllegalArgumentException> { server.start() }
-    }
-
-    @Test
-    fun `stop broadcasts shutdown and stops sub-servers`() {
+    fun `stop broadcasts shutdown and stops installed servers`() {
         val registry = PlayerRegistry()
         val player = TestPlayer(username = "Tester")
         registry.join(player)
 
         val server = HybridServer(playerRegistry = registry)
-        val java = FakeServerLifecycle()
-        val bedrock = FakeServerLifecycle()
-        server.javaServer = java
-        server.bedrockServer = bedrock
+        val a = FakeServerLifecycle()
+        val b = FakeServerLifecycle()
+        server.install(a)
+        server.install(b)
 
         server.stop()
 
         assertEquals("§cServer is shutting down…", player.lastMessage)
-        assertTrue(java.stopped)
-        assertTrue(bedrock.stopped)
+        assertTrue(a.stopped)
+        assertTrue(b.stopped)
     }
 
     @Test
-    fun `stop is safe when no sub-servers set`() {
+    fun `stop is safe with no servers installed`() {
         val server = HybridServer()
         server.stop()
+    }
+
+    @Test
+    fun `installed returns snapshot`() {
+        val server = HybridServer()
+        val a = FakeServerLifecycle()
+        server.install(a)
+        assertEquals(1, server.installed().size)
     }
 }
 
 class FakeServerLifecycle : ServerLifecycle {
+    override val edition: Edition = Edition.JAVA
     var started = false
     var stopped = false
 
