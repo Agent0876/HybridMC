@@ -7,28 +7,34 @@ import io.github.agent0876.hybridmc.java.JavaEditionServer
 
 fun main() {
     val config = ConfigLoader.load()
-
     val server = HybridServer()
 
-    server.install(JavaEditionServer(
-        registry = server.playerRegistry,
-        world = server.world,
-        host = config.java.host,
-        port = config.java.port,
-        maxPlayers = config.java.maxPlayers,
-        motd = config.java.motd,
-    ))
-
-    if (config.bedrock.enabled) {
-        server.install(BedrockEditionServer(
-            registry = server.playerRegistry,
-            world = server.world,
-            host = config.bedrock.host,
-            port = config.bedrock.port,
-            maxConnections = config.bedrock.maxConnections,
-            description = config.bedrock.description,
-            gameMode = config.world.gamemode.replaceFirstChar { it.uppercase() },
-        ))
+    config.editions.forEach { (key, cfg) ->
+        if (!cfg.enabled) return@forEach
+        val srv = when (key) {
+            "java" -> JavaEditionServer(
+                registry = server.playerRegistry,
+                world = server.world,
+                host = cfg.host,
+                port = cfg.port,
+                maxPlayers = (cfg.options["max-players"] as? Number)?.toInt() ?: 100,
+                motd = (cfg.options["motd"] as? String) ?: "§aHybridMC §7— Java + Bedrock",
+            )
+            "bedrock" -> BedrockEditionServer(
+                registry = server.playerRegistry,
+                world = server.world,
+                host = cfg.host,
+                port = cfg.port,
+                maxConnections = (cfg.options["max-connections"] as? Number)?.toInt() ?: 200,
+                description = (cfg.options["description"] as? String) ?: "HybridMC — Bedrock Edition",
+                gameMode = config.world.gamemode.replaceFirstChar { it.uppercase() },
+            )
+            else -> {
+                println("Unknown edition '$key' in config, skipping")
+                return@forEach
+            }
+        }
+        server.install(srv)
     }
 
     server.start()

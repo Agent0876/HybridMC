@@ -10,23 +10,22 @@ object ConfigLoader {
 
     private val logger = LoggerFactory.getLogger(ConfigLoader::class.java)
 
-    private val DEFAULT_PROPERTIES = """
-        #Minecraft server properties
-        server-port=25565
-        server-ip=0.0.0.0
-        max-players=100
-        motd=A Minecraft Server
-        online-mode=false
-    """.trimIndent()
-
     private val DEFAULT_YML = """
         # HybridMC configuration
-        bedrock:
-          enabled: true
-          host: 0.0.0.0
-          port: 19132
-          description: "HybridMC -- Bedrock Edition"
-          max-connections: 200
+        editions:
+          java:
+            enabled: true
+            host: 0.0.0.0
+            port: 25565
+            max-players: 100
+            motd: "§aHybridMC §7— Java + Bedrock"
+            online-mode: false
+          bedrock:
+            enabled: true
+            host: 0.0.0.0
+            port: 19132
+            description: "HybridMC -- Bedrock Edition"
+            max-connections: 200
         
         world:
           name: world
@@ -35,48 +34,48 @@ object ConfigLoader {
     """.trimIndent()
 
     fun load(dataDir: Path = Path.of(".")): HybridConfig {
-        val propsPath = dataDir.resolve("server.properties")
         val ymlPath = dataDir.resolve("hybrid.yml")
+        val propsPath = dataDir.resolve("server.properties")
 
-        if (Files.notExists(propsPath)) {
-            Files.writeString(propsPath, DEFAULT_PROPERTIES)
-            logger.info("Created default server.properties")
-        }
         if (Files.notExists(ymlPath)) {
             Files.writeString(ymlPath, DEFAULT_YML)
             logger.info("Created default hybrid.yml")
         }
 
-        val props = Properties().also { it.load(Files.newBufferedReader(propsPath)) }
+        // Priority: defaults < server.properties (legacy) < hybrid.yml
+        var editions = HybridConfig.defaultEditions()
+
+        val props = if (Files.exists(propsPath)) {
+            Properties().also { it.load(Files.newBufferedReader(propsPath)) }
+        } else null
+        if (props != null) {
+            editions = mergeLegacyProperties(editions, props)
+        }
+
         val ymlMap = readYaml(ymlPath)
+        val ymlEditions = parseEditions(ymlMap)
+        editions = deepMerge(editions, ymlEditions)
 
         return HybridConfig(
-            java = javaConfig(props),
-            bedrock = bedrockConfig(ymlMap),
+            editions = editions,
             world = worldConfig(ymlMap),
         )
     }
 
-    private fun javaConfig(props: Properties): JavaConfig {
-        return JavaConfig(
-            host = props.getProperty("server-ip", "0.0.0.0"),
-            port = props.getProperty("server-port", "25565").toIntOrNull() ?: 25565,
-            maxPlayers = props.getProperty("max-players", "100").toIntOrNull() ?: 100,
-            motd = props.getProperty("motd", "§aHybridMC §7— Java + Bedrock"),
-            onlineMode = props.getProperty("online-mode", "false").toBoolean(),
-        )
-    }
-
     @Suppress("UNCHECKED_CAST")
-    private fun bedrockConfig(yml: Map<String, Any?>): BedrockConfig {
-        val bk = (yml["bedrock"] as? Map<String, Any?>) ?: return BedrockConfig()
-        return BedrockConfig(
-            enabled = (bk["enabled"] as? Boolean) ?: true,
-            host = (bk["host"] as? String) ?: "0.0.0.0",
-            port = (bk["port"] as? Number)?.toInt() ?: 19132,
-            description = (bk["description"] as? String) ?: "HybridMC — Bedrock Edition",
-            maxConnections = (bk["max-connections"] as? Number)?.toInt() ?: 200,
-        )
+    private fun parseEditions(yml: Map<String, Any?>): Map<String, EditionConfig> {
+        val raw = (yml["editions"] as? Map<String, Any?>) ?: return emptyMap()
+        val result = mutableMapOf<String, EditionConfig>()
+        for ((key, value) in raw) {
+            val cfg = value as? Map<String, Any?> ?: continue
+            result[key] = EditionConfig(
+                enabled = (cfg["enabled"] as? Boolean) ?: true,
+                host = (cfg["host"] as? String) ?: "0.0.0.0",
+                port = (cfg["port"] as? Number)?.toInt() ?: 25565,
+                options = cfg.filterKeys { it !in setOf("enabled", "host", "port") },
+            )
+        }
+        return result.toMap()
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -87,6 +86,46 @@ object ConfigLoader {
             gamemode = (w["gamemode"] as? String) ?: "survival",
             difficulty = (w["difficulty"] as? String) ?: "easy",
         )
+    }
+
+    private fun deepMerge(
+        base: Map<String, EditionConfig>,
+        override: Map<String, EditionConfig>,
+    ): Map<String, EditionConfig> {
+        val result = base.toMutableMap()
+        for ((key, overCfg) in override) {
+            val baseCfg = result[key]
+            result[key] = if (baseCfg != null) {
+                baseCfg.copy(
+                    enabled = overCfg.enabled,
+                    host = overCfg.host,
+                    port = overCfg.port,
+                    options = baseCfg.options + overCfg.options,
+                )
+            } else {
+                overCfg
+            }
+        }
+        return result
+    }
+
+    private fun mergeLegacyProperties(
+        editions: Map<String, EditionConfig>,
+        props: Properties,
+    ): Map<String, EditionConfig> {
+        val result = editions.toMutableMap()
+        val java = result.getOrPut("java") { EditionConfig() }
+        result["java"] = java.copy(
+            enabled = java.enabled,
+            host = props.getProperty("server-ip", java.host),
+            port = props.getProperty("server-port", java.port.toString()).toIntOrNull() ?: java.port,
+            options = java.options + mapOf(
+                "max-players" to (props.getProperty("max-players", java.options["max-players"]?.toString() ?: "100")),
+                "motd" to (props.getProperty("motd", java.options["motd"]?.toString() ?: "§aHybridMC §7— Java + Bedrock")),
+                "online-mode" to (props.getProperty("online-mode", java.options["online-mode"]?.toString() ?: "false")),
+            ),
+        )
+        return result
     }
 
     @Suppress("UNCHECKED_CAST")

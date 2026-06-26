@@ -3,7 +3,7 @@ package io.github.agent0876.hybridmc.core.config
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ConfigLoaderTest {
@@ -11,76 +11,60 @@ class ConfigLoaderTest {
     private fun tempDir(): java.nio.file.Path = Files.createTempDirectory("hybridmc-test-")
 
     @Test
-    fun `creates default files when missing`() {
+    fun `creates default hybrid yml when missing`() {
         val dir = tempDir()
         val config = ConfigLoader.load(dir)
-        assertTrue(Files.exists(dir.resolve("server.properties")))
         assertTrue(Files.exists(dir.resolve("hybrid.yml")))
-        assertEquals(25565, config.java.port)
+        assertNotNull(config.editions["java"])
+        assertNotNull(config.editions["bedrock"])
         assertEquals("world", config.world.name)
         dir.toFile().deleteRecursively()
     }
 
     @Test
-    fun `reads server-properties correctly`() {
+    fun `reads edition settings from yml`() {
         val dir = tempDir()
-        val props = """
-            server-port=19132
-            server-ip=127.0.0.1
-            max-players=50
-            motd=Test Server
-            online-mode=true
-        """.trimIndent()
-        Files.writeString(dir.resolve("server.properties"), props)
-        Files.writeString(dir.resolve("hybrid.yml"), "world:\n  name: test\n")
+        Files.writeString(dir.resolve("hybrid.yml"), """
+            editions:
+              java:
+                enabled: true
+                host: 127.0.0.1
+                port: 25566
+                max-players: 50
+                motd: Custom MOTD
+              bedrock:
+                enabled: false
+                host: 10.0.0.1
+                port: 19133
+                description: Test
+                max-connections: 100
+        """.trimIndent())
 
         val config = ConfigLoader.load(dir)
-        assertEquals(19132, config.java.port)
-        assertEquals("127.0.0.1", config.java.host)
-        assertEquals(50, config.java.maxPlayers)
-        assertEquals("Test Server", config.java.motd)
-        assertTrue(config.java.onlineMode)
-        dir.toFile().deleteRecursively()
-    }
+        val java = config.editions["java"]!!
+        assertEquals("127.0.0.1", java.host)
+        assertEquals(25566, java.port)
+        assertEquals(50, (java.options["max-players"] as? Number)?.toInt())
+        assertEquals("Custom MOTD", java.options["motd"])
 
-    @Test
-    fun `reads bedrock config from yml`() {
-        val dir = tempDir()
-        Files.writeString(dir.resolve("server.properties"), "")
-        Files.writeString(
-            dir.resolve("hybrid.yml"),
-            """
-            bedrock:
-              enabled: false
-              host: 10.0.0.1
-              port: 19133
-              description: Custom Bedrock
-              max-connections: 100
-            """.trimIndent()
-        )
-
-        val config = ConfigLoader.load(dir)
-        assertFalse(config.bedrock.enabled)
-        assertEquals("10.0.0.1", config.bedrock.host)
-        assertEquals(19133, config.bedrock.port)
-        assertEquals("Custom Bedrock", config.bedrock.description)
-        assertEquals(100, config.bedrock.maxConnections)
+        val bk = config.editions["bedrock"]!!
+        assertEquals(false, bk.enabled)
+        assertEquals("10.0.0.1", bk.host)
+        assertEquals(19133, bk.port)
+        assertEquals(100, (bk.options["max-connections"] as? Number)?.toInt())
+        assertEquals("Test", bk.options["description"])
         dir.toFile().deleteRecursively()
     }
 
     @Test
     fun `reads world config from yml`() {
         val dir = tempDir()
-        Files.writeString(dir.resolve("server.properties"), "")
-        Files.writeString(
-            dir.resolve("hybrid.yml"),
-            """
+        Files.writeString(dir.resolve("hybrid.yml"), """
             world:
               name: nether
               gamemode: creative
               difficulty: hard
-            """.trimIndent()
-        )
+        """.trimIndent())
 
         val config = ConfigLoader.load(dir)
         assertEquals("nether", config.world.name)
@@ -90,27 +74,76 @@ class ConfigLoaderTest {
     }
 
     @Test
-    fun `uses defaults when files are empty`() {
+    fun `legacy server-properties merges into java`() {
         val dir = tempDir()
-        Files.writeString(dir.resolve("server.properties"), "")
+        Files.writeString(dir.resolve("server.properties"), """
+            server-port=25565
+            server-ip=0.0.0.0
+            max-players=99
+            motd=Legacy
+            online-mode=true
+        """.trimIndent())
         Files.writeString(dir.resolve("hybrid.yml"), "")
 
         val config = ConfigLoader.load(dir)
-        assertEquals(25565, config.java.port)
-        assertTrue(config.bedrock.enabled)
-        assertEquals("world", config.world.name)
+        val java = config.editions["java"]
+        assertNotNull(java)
+        assertEquals(25565, java.port)
+        assertEquals("0.0.0.0", java.host)
+        assertEquals("99", java.options["max-players"].toString())
+        assertEquals("Legacy", java.options["motd"])
+        assertEquals("true", java.options["online-mode"])
+        dir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `yml takes precedence over legacy properties`() {
+        val dir = tempDir()
+        Files.writeString(dir.resolve("server.properties"), """
+            server-port=9999
+            motd=FromProperties
+        """.trimIndent())
+        Files.writeString(dir.resolve("hybrid.yml"), """
+            editions:
+              java:
+                port: 25565
+                motd: "FromYml"
+        """.trimIndent())
+
+        val config = ConfigLoader.load(dir)
+        val java = config.editions["java"]!!
+        assertEquals(25565, java.port)
+        assertEquals("FromYml", java.options["motd"])
         dir.toFile().deleteRecursively()
     }
 
     @Test
     fun `uses defaults when yml is invalid`() {
         val dir = tempDir()
-        Files.writeString(dir.resolve("server.properties"), "")
         Files.writeString(dir.resolve("hybrid.yml"), "{{invalid_yaml}")
 
         val config = ConfigLoader.load(dir)
-        assertEquals(25565, config.java.port)
-        assertTrue(config.bedrock.enabled)
+        assertEquals(25565, config.editions["java"]?.port)
+        assertEquals(true, config.editions["bedrock"]?.enabled)
+        dir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `custom edition keys are preserved`() {
+        val dir = tempDir()
+        Files.writeString(dir.resolve("hybrid.yml"), """
+            editions:
+              custom-edition:
+                enabled: true
+                host: 1.2.3.4
+                port: 12345
+        """.trimIndent())
+
+        val config = ConfigLoader.load(dir)
+        val custom = config.editions["custom-edition"]
+        assertNotNull(custom)
+        assertEquals("1.2.3.4", custom.host)
+        assertEquals(12345, custom.port)
         dir.toFile().deleteRecursively()
     }
 }
