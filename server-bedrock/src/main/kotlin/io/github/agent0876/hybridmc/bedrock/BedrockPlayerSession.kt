@@ -142,6 +142,7 @@ class BedrockPlayerSession(
         when (packetId) {
             0xC1 -> handleRequestNetworkSettings(data)
             0x01 -> handleLogin(data)
+            0x09 -> handleTextPacket(data)
             else -> {
                 if (loginState == LoginState.LOGGED_IN) {
                     logger.debug("[{}] Unhandled game packet 0x{}", username, packetId.toString(16))
@@ -209,6 +210,17 @@ class BedrockPlayerSession(
         sendPlayStatus(0)
 
         registry.join(this)
+    }
+
+    private fun handleTextPacket(data: Buffer) {
+        if (loginState != LoginState.LOGGED_IN) return
+        data.readUnsignedByte()
+        data.readBoolean()
+        if (data.readableBytes() == 0) return
+        val message = readMcString(data)
+        logger.info("[BEDROCK] {}: {}", username, message)
+        val json = """{"text":"<${username}> ${escapeJson(message)}","color":"yellow"}"""
+        registry.all().forEach { it.sendMessage(json) }
     }
 
     private fun sendPlayStatus(status: Int) {
@@ -345,9 +357,24 @@ class BedrockPlayerSession(
         return pattern.find(json)?.groupValues?.get(1)
     }
 
+    private fun readMcString(buf: Buffer): String {
+        val len = buf.readUnsignedShort()
+        val bytes = ByteArray(len)
+        buf.readBytes(java.nio.ByteBuffer.wrap(bytes))
+        return String(bytes, StandardCharsets.UTF_8)
+    }
+
     private fun writeMcString(buf: Buffer, value: String) {
         val bytes = value.toByteArray(StandardCharsets.UTF_8)
         buf.writeUnsignedShort(bytes.size)
         buf.writeBytes(bytes)
+    }
+
+    private fun escapeJson(text: String): String {
+        return text.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
     }
 }

@@ -10,6 +10,12 @@ import io.netty5.channel.MultithreadEventLoopGroup
 import io.netty5.channel.nio.NioHandler
 import io.netty5.channel.socket.SocketChannel
 import io.netty5.channel.socket.nio.NioServerSocketChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.slf4j.LoggerFactory
 import kotlin.coroutines.resume
@@ -28,6 +34,7 @@ class JavaEditionServer(
 
     private val bossGroup = MultithreadEventLoopGroup(1, NioHandler.newFactory())
     private val workerGroup = MultithreadEventLoopGroup(0, NioHandler.newFactory())
+    private val tickScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun start(): Unit = suspendCancellableCoroutine { cont ->
         val bootstrap = ServerBootstrap()
@@ -47,6 +54,7 @@ class JavaEditionServer(
         future.addListener(io.netty5.util.concurrent.FutureListener { f ->
             if (f.isSuccess) {
                 logger.info("Java Edition server listening on {}:{}", host, port)
+                startKeepAliveTask()
                 cont.resume(Unit)
             } else {
                 logger.error("Java Edition server failed to bind on {}:{}", host, port, f.cause())
@@ -57,8 +65,22 @@ class JavaEditionServer(
         cont.invokeOnCancellation { stop() }
     }
 
+    private fun startKeepAliveTask() {
+        tickScope.launch {
+            while (true) {
+                delay(20_000L)
+                registry.all().forEach { player ->
+                    if (player is JavaPlayerSession) {
+                        player.sendKeepAlive()
+                    }
+                }
+            }
+        }
+    }
+
     override fun stop() {
         logger.info("Shutting down Java Edition server…")
+        tickScope.cancel()
         bossGroup.shutdownGracefully()
         workerGroup.shutdownGracefully()
     }

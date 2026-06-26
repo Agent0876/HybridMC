@@ -4,6 +4,7 @@ netty      = "5.0.0.Alpha5"
 raknetty   = "1.0.0"
 logback    = "1.5.18"
 coroutines = "1.10.2"
+snakeyaml  = "2.4"
 
 [libraries]
 # Kotlin
@@ -27,6 +28,9 @@ raknetty-core        = { module = "io.github.agent0876.raknetty:raknetty-core", 
 
 # Logging
 logback-classic      = { module = "ch.qos.logback:logback-classic",            version.ref = "logback" }
+
+# Config
+snakeyaml            = { module = "org.yaml:snakeyaml",                        version.ref = "snakeyaml" }
 
 [plugins]
 kotlin-jvm           = { id = "org.jetbrains.kotlin.jvm",                      version.ref = "kotlin" }

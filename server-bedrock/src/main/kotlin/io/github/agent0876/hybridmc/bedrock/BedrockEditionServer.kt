@@ -20,7 +20,9 @@ class BedrockEditionServer(
     private val world: GameWorld,
     private val host: String = "0.0.0.0",
     private val port: Int = 19132,
+    private val maxConnections: Int = 200,
     private val description: String = "HybridMC — Bedrock Edition",
+    private val gameMode: String = "Survival",
 ) : ServerLifecycle {
 
     private val logger = LoggerFactory.getLogger(BedrockEditionServer::class.java)
@@ -40,11 +42,11 @@ class BedrockEditionServer(
                         description = description,
                         serverGuid = serverGuid,
                         worldName = world.name,
-                        gameMode = "Survival",
+                        gameMode = gameMode,
                         registry = registry
                     )
                 }
-                .maxConnections(200)
+                .maxConnections(maxConnections)
                 .handler(BedrockPacketHandler(registry, world))
 
             val future = bootstrap.bind(InetSocketAddress(host, port))
