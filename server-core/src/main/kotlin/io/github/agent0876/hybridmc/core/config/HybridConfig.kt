@@ -11,9 +11,14 @@ data class HybridConfig(
                 host = "0.0.0.0",
                 port = 25565,
                 options = mapOf(
-                    "max-players" to "100",
                     "motd" to "§aHybridMC §7— Java + Bedrock",
-                    "online-mode" to "false",
+                    "white-list" to "false",
+                    "enforce-secure-profile" to "false",
+                    "spawn-protection" to "16",
+                    "hardcore" to "false",
+                    "allow-flight" to "false",
+                    "network-compression-threshold" to "256",
+                    "simulation-distance" to "10",
                 ),
             ),
             "bedrock" to EditionConfig(
@@ -21,8 +26,16 @@ data class HybridConfig(
                 host = "0.0.0.0",
                 port = 19132,
                 options = mapOf(
-                    "description" to "HybridMC — Bedrock Edition",
+                    "server-name" to "HybridMC",
+                    "server-portv6" to "19133",
+                    "allow-list" to "false",
+                    "allow-cheats" to "false",
+                    "tick-distance" to "4",
                     "max-connections" to "200",
+                    "compression-threshold" to "1",
+                    "compression-algorithm" to "zlib",
+                    "default-player-permission-level" to "member",
+                    "texturepack-required" to "false",
                 ),
             ),
         )
@@ -38,6 +51,8 @@ data class EditionConfig(
 
 data class WorldConfig(
     val name: String = "world",
+    val seed: String = "",
     val gamemode: String = "survival",
+    val forceGamemode: Boolean = false,
     val difficulty: String = "easy",
 )

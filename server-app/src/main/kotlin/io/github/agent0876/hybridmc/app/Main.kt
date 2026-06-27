@@ -26,7 +26,7 @@ fun main() {
                 host = cfg.host,
                 port = cfg.port,
                 maxConnections = (cfg.options["max-connections"] as? Number)?.toInt() ?: 200,
-                description = (cfg.options["description"] as? String) ?: "HybridMC — Bedrock Edition",
+                description = (cfg.options["server-name"] as? String) ?: "HybridMC",
                 gameMode = config.world.gamemode.replaceFirstChar { it.uppercase() },
             )
             else -> {

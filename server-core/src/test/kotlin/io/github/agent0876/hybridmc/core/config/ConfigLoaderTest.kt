@@ -11,9 +11,10 @@ class ConfigLoaderTest {
     private fun tempDir(): java.nio.file.Path = Files.createTempDirectory("hybridmc-test-")
 
     @Test
-    fun `creates default hybrid yml when missing`() {
+    fun `creates default config files when missing`() {
         val dir = tempDir()
         val config = ConfigLoader.load(dir)
+        assertTrue(Files.exists(dir.resolve("server.properties")))
         assertTrue(Files.exists(dir.resolve("hybrid.yml")))
         assertNotNull(config.editions["java"])
         assertNotNull(config.editions["bedrock"])
@@ -22,7 +23,7 @@ class ConfigLoaderTest {
     }
 
     @Test
-    fun `reads edition settings from yml`() {
+    fun `reads edition network settings from yml`() {
         val dir = tempDir()
         Files.writeString(dir.resolve("hybrid.yml"), """
             editions:
@@ -30,13 +31,11 @@ class ConfigLoaderTest {
                 enabled: true
                 host: 127.0.0.1
                 port: 25566
-                max-players: 50
-                motd: Custom MOTD
               bedrock:
                 enabled: false
                 host: 10.0.0.1
                 port: 19133
-                description: Test
+                server-name: Test
                 max-connections: 100
         """.trimIndent())
 
@@ -44,21 +43,41 @@ class ConfigLoaderTest {
         val java = config.editions["java"]!!
         assertEquals("127.0.0.1", java.host)
         assertEquals(25566, java.port)
-        assertEquals(50, (java.options["max-players"] as? Number)?.toInt())
-        assertEquals("Custom MOTD", java.options["motd"])
 
         val bk = config.editions["bedrock"]!!
         assertEquals(false, bk.enabled)
         assertEquals("10.0.0.1", bk.host)
         assertEquals(19133, bk.port)
         assertEquals(100, (bk.options["max-connections"] as? Number)?.toInt())
-        assertEquals("Test", bk.options["description"])
+        assertEquals("Test", bk.options["server-name"])
         dir.toFile().deleteRecursively()
     }
 
     @Test
-    fun `reads world config from yml`() {
+    fun `reads world config from server properties`() {
         val dir = tempDir()
+        Files.writeString(dir.resolve("server.properties"), """
+            level-name=nether
+            gamemode=creative
+            difficulty=hard
+        """.trimIndent())
+        Files.writeString(dir.resolve("hybrid.yml"), "")
+
+        val config = ConfigLoader.load(dir)
+        assertEquals("nether", config.world.name)
+        assertEquals("creative", config.world.gamemode)
+        assertEquals("hard", config.world.difficulty)
+        dir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `reads world config from yml overriding server properties`() {
+        val dir = tempDir()
+        Files.writeString(dir.resolve("server.properties"), """
+            level-name=world
+            gamemode=survival
+            difficulty=easy
+        """.trimIndent())
         Files.writeString(dir.resolve("hybrid.yml"), """
             world:
               name: nether
@@ -74,34 +93,39 @@ class ConfigLoaderTest {
     }
 
     @Test
-    fun `legacy server-properties merges into java`() {
+    fun `reads common settings from server properties`() {
         val dir = tempDir()
         Files.writeString(dir.resolve("server.properties"), """
-            server-port=25565
             server-ip=0.0.0.0
-            max-players=99
-            motd=Legacy
-            online-mode=true
+            max-players=50
+            online-mode=false
+            level-name=myworld
+            level-seed=12345
+            gamemode=creative
+            force-gamemode=true
+            difficulty=hard
         """.trimIndent())
         Files.writeString(dir.resolve("hybrid.yml"), "")
 
         val config = ConfigLoader.load(dir)
         val java = config.editions["java"]
         assertNotNull(java)
-        assertEquals(25565, java.port)
         assertEquals("0.0.0.0", java.host)
-        assertEquals("99", java.options["max-players"].toString())
-        assertEquals("Legacy", java.options["motd"])
-        assertEquals("true", java.options["online-mode"])
+        assertEquals(50, (java.options["max-players"] as? Number)?.toInt())
+        assertEquals("false", java.options["online-mode"])
+        assertEquals("myworld", config.world.name)
+        assertEquals("12345", config.world.seed)
+        assertEquals("creative", config.world.gamemode)
+        assertEquals(true, config.world.forceGamemode)
+        assertEquals("hard", config.world.difficulty)
         dir.toFile().deleteRecursively()
     }
 
     @Test
-    fun `yml takes precedence over legacy properties`() {
+    fun `yml overrides server properties`() {
         val dir = tempDir()
         Files.writeString(dir.resolve("server.properties"), """
             server-port=9999
-            motd=FromProperties
         """.trimIndent())
         Files.writeString(dir.resolve("hybrid.yml"), """
             editions:

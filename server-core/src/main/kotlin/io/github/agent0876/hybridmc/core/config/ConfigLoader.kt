@@ -10,47 +10,74 @@ object ConfigLoader {
 
     private val logger = LoggerFactory.getLogger(ConfigLoader::class.java)
 
+    private val DEFAULT_PROPERTIES = """
+        # Common server settings
+        server-ip=
+        level-name=world
+        level-seed=
+        gamemode=survival
+        force-gamemode=false
+        difficulty=easy
+        max-players=20
+        online-mode=true
+        view-distance=10
+        player-idle-timeout=0
+    """.trimIndent()
+
     private val DEFAULT_YML = """
-        # HybridMC configuration
+        # HybridMC edition settings
+        # Common settings (gamemode, difficulty, max-players, etc.) are in server.properties
         editions:
           java:
             enabled: true
             host: 0.0.0.0
             port: 25565
-            max-players: 100
+            # Java Edition specific
             motd: "§aHybridMC §7— Java + Bedrock"
-            online-mode: false
+            white-list: false
+            enforce-secure-profile: false
+            spawn-protection: 16
+            hardcore: false
+            allow-flight: false
+            network-compression-threshold: 256
+            simulation-distance: 10
           bedrock:
             enabled: true
             host: 0.0.0.0
             port: 19132
-            description: "HybridMC -- Bedrock Edition"
+            # Bedrock Edition specific
+            server-name: "HybridMC"
+            server-portv6: 19133
+            allow-list: false
+            allow-cheats: false
+            tick-distance: 4
             max-connections: 200
-        
-        world:
-          name: world
-          gamemode: survival
-          difficulty: easy
+            compression-threshold: 1
+            compression-algorithm: zlib
+            default-player-permission-level: member
+            texturepack-required: false
     """.trimIndent()
 
     fun load(dataDir: Path = Path.of(".")): HybridConfig {
-        val ymlPath = dataDir.resolve("hybrid.yml")
         val propsPath = dataDir.resolve("server.properties")
+        val ymlPath = dataDir.resolve("hybrid.yml")
 
+        if (Files.notExists(propsPath)) {
+            Files.writeString(propsPath, DEFAULT_PROPERTIES)
+            logger.info("Created default server.properties")
+        }
         if (Files.notExists(ymlPath)) {
             Files.writeString(ymlPath, DEFAULT_YML)
             logger.info("Created default hybrid.yml")
         }
 
-        // Priority: defaults < server.properties (legacy) < hybrid.yml
+        // Priority: defaults < server.properties < hybrid.yml
         var editions = HybridConfig.defaultEditions()
 
-        val props = if (Files.exists(propsPath)) {
-            Properties().also { it.load(Files.newBufferedReader(propsPath)) }
-        } else null
-        if (props != null) {
-            editions = mergeLegacyProperties(editions, props)
+        val props = Files.newBufferedReader(propsPath).use { reader ->
+            Properties().also { it.load(reader) }
         }
+        editions = mergeServerProperties(editions, props)
 
         val ymlMap = readYaml(ymlPath)
         val ymlEditions = parseEditions(ymlMap)
@@ -58,7 +85,7 @@ object ConfigLoader {
 
         return HybridConfig(
             editions = editions,
-            world = worldConfig(ymlMap),
+            world = worldConfig(props, ymlMap),
         )
     }
 
@@ -79,12 +106,15 @@ object ConfigLoader {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun worldConfig(yml: Map<String, Any?>): WorldConfig {
-        val w = (yml["world"] as? Map<String, Any?>) ?: return WorldConfig()
+    private fun worldConfig(props: Properties, yml: Map<String, Any?>): WorldConfig {
+        val w = (yml["world"] as? Map<String, Any?>) ?: emptyMap()
         return WorldConfig(
-            name = (w["name"] as? String) ?: "world",
-            gamemode = (w["gamemode"] as? String) ?: "survival",
-            difficulty = (w["difficulty"] as? String) ?: "easy",
+            name = (w["name"] as? String) ?: props.getProperty("level-name", "world"),
+            seed = (w["seed"] as? String) ?: props.getProperty("level-seed", ""),
+            gamemode = (w["gamemode"] as? String) ?: props.getProperty("gamemode", "survival"),
+            forceGamemode = (w["force-gamemode"] as? Boolean)
+                ?: props.getProperty("force-gamemode", "false").toBoolean(),
+            difficulty = (w["difficulty"] as? String) ?: props.getProperty("difficulty", "easy"),
         )
     }
 
@@ -109,21 +139,20 @@ object ConfigLoader {
         return result
     }
 
-    private fun mergeLegacyProperties(
+    private fun mergeServerProperties(
         editions: Map<String, EditionConfig>,
         props: Properties,
     ): Map<String, EditionConfig> {
         val result = editions.toMutableMap()
         val java = result.getOrPut("java") { EditionConfig() }
+        val commonOptions = buildMap<String, Any?> {
+            props.getProperty("max-players")?.toIntOrNull()?.let { put("max-players", it) }
+            props.getProperty("online-mode")?.let { put("online-mode", it) }
+        }
         result["java"] = java.copy(
-            enabled = java.enabled,
-            host = props.getProperty("server-ip", java.host),
-            port = props.getProperty("server-port", java.port.toString()).toIntOrNull() ?: java.port,
-            options = java.options + mapOf(
-                "max-players" to (props.getProperty("max-players", java.options["max-players"]?.toString() ?: "100")),
-                "motd" to (props.getProperty("motd", java.options["motd"]?.toString() ?: "§aHybridMC §7— Java + Bedrock")),
-                "online-mode" to (props.getProperty("online-mode", java.options["online-mode"]?.toString() ?: "false")),
-            ),
+            host = props.getProperty("server-ip")?.takeIf { it.isNotBlank() } ?: java.host,
+            port = props.getProperty("server-port")?.toIntOrNull() ?: java.port,
+            options = java.options + commonOptions,
         )
         return result
     }
