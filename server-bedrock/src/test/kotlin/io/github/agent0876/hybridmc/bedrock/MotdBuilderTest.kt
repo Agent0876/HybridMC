@@ -15,8 +15,17 @@ class MotdBuilderTest {
         override val username = "Fake"
         override val edition = Edition.BEDROCK
         override val ping = 0
-        override fun sendMessage(text: String) {}
+        override val entityId = 1
+        override var x = 0.0
+        override var y = 100.0
+        override var z = 0.0
+        override var yaw = 0.0f
+        override var pitch = 0.0f
+        override fun sendMessage(message: String) {}
         override fun disconnect(reason: String) {}
+        override fun spawnPlayer(target: HybridPlayer) {}
+        override fun removePlayer(target: HybridPlayer) {}
+        override fun movePlayer(target: HybridPlayer) {}
     }
 
     @Test

@@ -35,6 +35,14 @@ class BedrockPlayerSession(
 
     // -- HybridPlayer --
 
+    override val entityId: Int = kotlin.random.Random.nextInt(100000, 999999)
+
+    override var x: Double = 0.0
+    override var y: Double = 100.0
+    override var z: Double = 0.0
+    override var yaw: Float = 0.0f
+    override var pitch: Float = 0.0f
+
     override var uuid: UUID = UUID.randomUUID()
         private set
 
@@ -144,6 +152,7 @@ class BedrockPlayerSession(
             0x01 -> handleLogin(data)
             0x09 -> handleTextPacket(data)
             0x4D -> handleCommandRequest(data)
+            0x13 -> handleMovePlayer(data)
             else -> {
                 if (loginState == LoginState.LOGGED_IN) {
                     logger.debug("[{}] Unhandled game packet 0x{}", username, packetId.toString(16))
@@ -229,6 +238,24 @@ class BedrockPlayerSession(
         val command = readMcString(data)
         logger.info("[BEDROCK] {} executed command: {}", username, command)
         registry.commandManager.execute(this, command)
+    }
+
+    private fun handleMovePlayer(data: Buffer) {
+        if (loginState != LoginState.LOGGED_IN) return
+        readUnsignedVarInt(data) // runtimeEntityId
+        x = readFloatLE(data).toDouble()
+        y = readFloatLE(data).toDouble()
+        z = readFloatLE(data).toDouble()
+        pitch = readFloatLE(data)
+        yaw = readFloatLE(data)
+        readFloatLE(data) // headYaw
+        data.readUnsignedByte() // mode
+        data.readBoolean() // onGround
+        registry.broadcastMovement(this)
+    }
+
+    private fun readFloatLE(buf: Buffer): Float {
+        return java.lang.Float.intBitsToFloat(readUnsignedIntLE(buf))
     }
 
     private fun sendPlayStatus(status: Int) {
@@ -356,6 +383,75 @@ class BedrockPlayerSession(
         val b2 = buf.readUnsignedByte()
         val b3 = buf.readUnsignedByte()
         return (b3 shl 24) or (b2 shl 16) or (b1 shl 8) or b0
+    }
+
+    private fun writeIntLE(buf: Buffer, value: Int) {
+        buf.writeByte((value and 0xFF).toByte())
+        buf.writeByte(((value ushr 8) and 0xFF).toByte())
+        buf.writeByte(((value ushr 16) and 0xFF).toByte())
+        buf.writeByte(((value ushr 24) and 0xFF).toByte())
+    }
+
+    private fun writeFloatLE(buf: Buffer, value: Float) {
+        writeIntLE(buf, java.lang.Float.floatToIntBits(value))
+    }
+
+    override fun spawnPlayer(target: HybridPlayer) {
+        val inner = allocator.allocate(256)
+        try {
+            writeVarInt(inner, 0x0C)
+            inner.writeLong(target.uuid.mostSignificantBits)
+            inner.writeLong(target.uuid.leastSignificantBits)
+            writeMcString(inner, target.username)
+            writeVarInt(inner, target.entityId)
+            writeVarInt(inner, target.entityId)
+            writeMcString(inner, "")
+            writeFloatLE(inner, target.x.toFloat())
+            writeFloatLE(inner, target.y.toFloat())
+            writeFloatLE(inner, target.z.toFloat())
+            writeFloatLE(inner, 0.0f)
+            writeFloatLE(inner, 0.0f)
+            writeFloatLE(inner, 0.0f)
+            writeFloatLE(inner, target.pitch)
+            writeFloatLE(inner, target.yaw)
+            writeFloatLE(inner, target.yaw)
+            writeVarInt(inner, 0)
+            writeVarInt(inner, 0)
+            sendBatch(inner)
+        } finally {
+            inner.close()
+        }
+    }
+
+    override fun removePlayer(target: HybridPlayer) {
+        val inner = allocator.allocate(64)
+        try {
+            writeVarInt(inner, 0x0E)
+            writeVarInt(inner, target.entityId)
+            sendBatch(inner)
+        } finally {
+            inner.close()
+        }
+    }
+
+    override fun movePlayer(target: HybridPlayer) {
+        val inner = allocator.allocate(128)
+        try {
+            writeVarInt(inner, 0x13)
+            writeVarInt(inner, target.entityId)
+            writeFloatLE(inner, target.x.toFloat())
+            writeFloatLE(inner, target.y.toFloat())
+            writeFloatLE(inner, target.z.toFloat())
+            writeFloatLE(inner, target.pitch)
+            writeFloatLE(inner, target.yaw)
+            writeFloatLE(inner, target.yaw)
+            inner.writeByte(0)
+            inner.writeBoolean(true)
+            writeVarInt(inner, 0)
+            sendBatch(inner)
+        } finally {
+            inner.close()
+        }
     }
 
     // -- Utility --

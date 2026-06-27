@@ -12,11 +12,17 @@ class JavaPlayerSession(
     val ctx: ChannelHandlerContext,
     override val uuid: UUID,
     override val username: String,
-    val entityId: Int,
+    override val entityId: Int,
     private val registry: PlayerRegistry,
 ) : HybridPlayer {
 
     override val edition: Edition = Edition.JAVA
+
+    override var x: Double = 0.0
+    override var y: Double = 100.0
+    override var z: Double = 0.0
+    override var yaw: Float = 0.0f
+    override var pitch: Float = 0.0f
 
     override var ping: Int = 0
         internal set
@@ -76,6 +82,72 @@ class JavaPlayerSession(
             ctx.writeAndFlush(out)
         } finally {
             bodyBuf.close()
+        }
+    }
+
+    fun sendPositionAndLook() {
+        writePacket(0x40) { buf ->
+            buf.writeDouble(x)
+            buf.writeDouble(y)
+            buf.writeDouble(z)
+            buf.writeFloat(yaw)
+            buf.writeFloat(pitch)
+            buf.writeByte(0)
+            buf.writeUnsignedVarInt(1)
+        }
+    }
+
+    override fun spawnPlayer(target: HybridPlayer) {
+        writePacket(0x3C) { buf ->
+            buf.writeByte(0x09)
+            buf.writeUnsignedVarInt(1)
+            buf.writeLong(target.uuid.mostSignificantBits)
+            buf.writeLong(target.uuid.leastSignificantBits)
+            buf.writeMcString(target.username)
+            buf.writeUnsignedVarInt(0)
+            buf.writeBoolean(true)
+        }
+        writePacket(0x01) { buf ->
+            buf.writeUnsignedVarInt(target.entityId)
+            buf.writeLong(target.uuid.mostSignificantBits)
+            buf.writeLong(target.uuid.leastSignificantBits)
+            buf.writeUnsignedVarInt(124)
+            buf.writeDouble(target.x)
+            buf.writeDouble(target.y)
+            buf.writeDouble(target.z)
+            buf.writeByte((target.pitch * 256f / 360f).toInt().toByte())
+            buf.writeByte((target.yaw * 256f / 360f).toInt().toByte())
+            buf.writeByte((target.yaw * 256f / 360f).toInt().toByte())
+            buf.writeUnsignedVarInt(0)
+            buf.writeShort(0)
+            buf.writeShort(0)
+            buf.writeShort(0)
+        }
+    }
+
+    override fun removePlayer(target: HybridPlayer) {
+        writePacket(0x42) { buf ->
+            buf.writeUnsignedVarInt(1)
+            buf.writeUnsignedVarInt(target.entityId)
+        }
+        writePacket(0x3C) { buf ->
+            buf.writeByte(0x08)
+            buf.writeUnsignedVarInt(1)
+            buf.writeLong(target.uuid.mostSignificantBits)
+            buf.writeLong(target.uuid.leastSignificantBits)
+            buf.writeBoolean(false)
+        }
+    }
+
+    override fun movePlayer(target: HybridPlayer) {
+        writePacket(0x71) { buf ->
+            buf.writeUnsignedVarInt(target.entityId)
+            buf.writeDouble(target.x)
+            buf.writeDouble(target.y)
+            buf.writeDouble(target.z)
+            buf.writeByte((target.yaw * 256f / 360f).toInt().toByte())
+            buf.writeByte((target.pitch * 256f / 360f).toInt().toByte())
+            buf.writeBoolean(true)
         }
     }
 

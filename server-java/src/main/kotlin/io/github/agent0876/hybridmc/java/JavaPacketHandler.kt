@@ -180,6 +180,7 @@ class JavaPacketHandler(
         registry.join(sess)
 
         sendLoginPlay(ctx, sess)
+        sess.sendPositionAndLook()
         state = State.PLAY
         logger.info("{} entered PLAY state (entityId={})", name, entityId)
     }
@@ -341,8 +342,49 @@ class JavaPacketHandler(
             0x05 -> handleChatMessage(ctx, data)
             0x04 -> handleChatCommand(ctx, data)
             0x08 -> handleClientInformation(data)
+            0x00 -> handleConfirmTeleport(data)
+            0x17 -> handlePlayerPosition(data)
+            0x18 -> handlePlayerPositionAndRotation(data)
+            0x19 -> handlePlayerRotation(data)
+            0x1a -> handlePlayerOnGround(data)
             else -> logger.debug("[{}] Unhandled PLAY packet 0x{}", session?.username ?: "?", packetId.toString(16))
         }
+    }
+
+    private fun handleConfirmTeleport(data: Buffer) {
+        data.readUnsignedVarInt()
+    }
+
+    private fun handlePlayerPosition(data: Buffer) {
+        val sess = session ?: return
+        sess.x = data.readDouble()
+        sess.y = data.readDouble()
+        sess.z = data.readDouble()
+        data.readBoolean()
+        registry.broadcastMovement(sess)
+    }
+
+    private fun handlePlayerPositionAndRotation(data: Buffer) {
+        val sess = session ?: return
+        sess.x = data.readDouble()
+        sess.y = data.readDouble()
+        sess.z = data.readDouble()
+        sess.yaw = data.readFloat()
+        sess.pitch = data.readFloat()
+        data.readBoolean()
+        registry.broadcastMovement(sess)
+    }
+
+    private fun handlePlayerRotation(data: Buffer) {
+        val sess = session ?: return
+        sess.yaw = data.readFloat()
+        sess.pitch = data.readFloat()
+        data.readBoolean()
+        registry.broadcastMovement(sess)
+    }
+
+    private fun handlePlayerOnGround(data: Buffer) {
+        data.readBoolean()
     }
 
     private fun handleKeepAlive(data: Buffer) {

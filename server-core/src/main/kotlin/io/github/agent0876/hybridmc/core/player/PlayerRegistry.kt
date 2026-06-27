@@ -35,6 +35,15 @@ class PlayerRegistry {
     fun join(player: HybridPlayer) {
         players[player.uuid] = player
         logger.info("[{}] {} joined (ping={}ms)", player.edition, player.username, player.ping)
+
+        // Spawn this player to others, and others to this player
+        players.values.forEach { existing ->
+            if (existing != player) {
+                existing.spawnPlayer(player)
+                player.spawnPlayer(existing)
+            }
+        }
+
         broadcast("§e${player.username} joined the game.")
     }
 
@@ -45,7 +54,24 @@ class PlayerRegistry {
     fun leave(player: HybridPlayer) {
         if (players.remove(player.uuid) != null) {
             logger.info("[{}] {} left", player.edition, player.username)
+
+            // Remove this player from others
+            players.values.forEach { remaining ->
+                remaining.removePlayer(player)
+            }
+
             broadcast("§e${player.username} left the game.")
+        }
+    }
+
+    /**
+     * Broadcasts [sender]'s movement to all other players.
+     */
+    fun broadcastMovement(sender: HybridPlayer) {
+        players.values.forEach { receiver ->
+            if (receiver != sender) {
+                receiver.movePlayer(sender)
+            }
         }
     }
 

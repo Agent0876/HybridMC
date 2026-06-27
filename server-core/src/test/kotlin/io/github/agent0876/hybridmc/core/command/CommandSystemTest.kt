@@ -16,6 +16,13 @@ class CommandSystemTest {
         override val edition: Edition = Edition.JAVA,
         override val ping: Int = 5,
     ) : HybridPlayer {
+        override val entityId: Int = 9999
+        override var x: Double = 0.0
+        override var y: Double = 100.0
+        override var z: Double = 0.0
+        override var yaw: Float = 0.0f
+        override var pitch: Float = 0.0f
+
         val messages = mutableListOf<String>()
         var disconnected = false
 
@@ -26,6 +33,10 @@ class CommandSystemTest {
         override fun disconnect(reason: String) {
             disconnected = true
         }
+
+        override fun spawnPlayer(target: HybridPlayer) {}
+        override fun removePlayer(target: HybridPlayer) {}
+        override fun movePlayer(target: HybridPlayer) {}
     }
 
     private class MockConsoleSender : CommandSender {

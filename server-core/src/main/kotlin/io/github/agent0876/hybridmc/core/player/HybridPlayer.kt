@@ -16,6 +16,16 @@ interface HybridPlayer : CommandSender {
     /** Unique player identifier (randomly generated per session if not authenticated). */
     val uuid: UUID
 
+    /** Unique runtime entity ID assigned by the server. */
+    val entityId: Int
+
+    /** Position and orientation coordinates. */
+    var x: Double
+    var y: Double
+    var z: Double
+    var yaw: Float
+    var pitch: Float
+
     /** In-game display name / username. */
     val username: String
 
@@ -36,4 +46,13 @@ interface HybridPlayer : CommandSender {
      * The implementation sends the appropriate disconnect packet before closing the session.
      */
     fun disconnect(reason: String = "Disconnected")
+
+    /** Spawns another player on this player's client. */
+    fun spawnPlayer(target: HybridPlayer)
+
+    /** Despawns another player on this player's client. */
+    fun removePlayer(target: HybridPlayer)
+
+    /** Synchronizes another player's movement on this player's client. */
+    fun movePlayer(target: HybridPlayer)
 }
