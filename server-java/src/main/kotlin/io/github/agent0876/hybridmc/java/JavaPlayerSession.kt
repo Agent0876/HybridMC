@@ -72,7 +72,7 @@ class JavaPlayerSession(
 
             val out = alloc.allocate(bodyBuf.readableBytes() + 5)
             out.writeUnsignedVarInt(bodyBuf.readableBytes())
-            out.writeBytes(bodyBuf.copy())
+            out.writeBytes(bodyBuf)
             ctx.writeAndFlush(out)
         } finally {
             bodyBuf.close()
