@@ -17,7 +17,7 @@ fun main() {
                 world = server.world,
                 host = cfg.host,
                 port = cfg.port,
-                maxPlayers = (cfg.options["max-players"] as? Number)?.toInt() ?: 100,
+                maxPlayers = (cfg.options["max-players"] as? Number)?.toInt() ?: 20,
                 motd = (cfg.options["motd"] as? String) ?: "§aHybridMC §7— Java + Bedrock",
             )
             "bedrock" -> BedrockEditionServer(
@@ -25,7 +25,9 @@ fun main() {
                 world = server.world,
                 host = cfg.host,
                 port = cfg.port,
+                portv6 = (cfg.options["server-portv6"] as? Number)?.toInt() ?: 19133,
                 maxConnections = (cfg.options["max-connections"] as? Number)?.toInt() ?: 200,
+                maxPlayers = (cfg.options["max-players"] as? Number)?.toInt() ?: 20,
                 description = (cfg.options["server-name"] as? String) ?: "HybridMC",
                 gameMode = config.world.gamemode.replaceFirstChar { it.uppercase() },
             )

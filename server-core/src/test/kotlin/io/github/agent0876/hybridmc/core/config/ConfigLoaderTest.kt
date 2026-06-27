@@ -153,6 +153,46 @@ class ConfigLoaderTest {
     }
 
     @Test
+    fun `unquoted integer seed in yml is preserved`() {
+        val dir = tempDir()
+        Files.writeString(dir.resolve("hybrid.yml"), """
+            world:
+              seed: 12345
+        """.trimIndent())
+
+        val config = ConfigLoader.load(dir)
+        assertEquals("12345", config.world.seed)
+        dir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `bedrock port preserved when yml omits port key`() {
+        val dir = tempDir()
+        Files.writeString(dir.resolve("hybrid.yml"), """
+            editions:
+              bedrock:
+                server-name: MyServer
+        """.trimIndent())
+
+        val config = ConfigLoader.load(dir)
+        assertEquals(19132, config.editions["bedrock"]?.port)
+        dir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `server-ip from server properties not overwritten by yml default host`() {
+        val dir = tempDir()
+        Files.writeString(dir.resolve("server.properties"), """
+            server-ip=192.168.1.100
+        """.trimIndent())
+        Files.writeString(dir.resolve("hybrid.yml"), "")
+
+        val config = ConfigLoader.load(dir)
+        assertEquals("192.168.1.100", config.editions["java"]?.host)
+        dir.toFile().deleteRecursively()
+    }
+
+    @Test
     fun `custom edition keys are preserved`() {
         val dir = tempDir()
         Files.writeString(dir.resolve("hybrid.yml"), """

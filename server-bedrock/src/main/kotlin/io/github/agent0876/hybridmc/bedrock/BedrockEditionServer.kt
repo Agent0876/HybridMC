@@ -21,7 +21,9 @@ class BedrockEditionServer(
     private val world: GameWorld,
     private val host: String = "0.0.0.0",
     private val port: Int = 19132,
+    private val portv6: Int = 19133,
     private val maxConnections: Int = 200,
+    private val maxPlayers: Int = 20,
     private val description: String = "HybridMC — Bedrock Edition",
     private val gameMode: String = "Survival",
 ) : ServerLifecycle {
@@ -45,7 +47,10 @@ class BedrockEditionServer(
                         serverGuid = serverGuid,
                         worldName = world.name,
                         gameMode = gameMode,
-                        registry = registry
+                        registry = registry,
+                        maxPlayers = maxPlayers,
+                        port = port,
+                        portv6 = portv6,
                     )
                 }
                 .maxConnections(maxConnections)

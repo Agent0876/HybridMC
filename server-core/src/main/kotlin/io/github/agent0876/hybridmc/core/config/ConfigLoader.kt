@@ -89,16 +89,23 @@ object ConfigLoader {
         )
     }
 
+    private data class EditionOverride(
+        val enabled: Boolean?,
+        val host: String?,
+        val port: Int?,
+        val options: Map<String, Any?>,
+    )
+
     @Suppress("UNCHECKED_CAST")
-    private fun parseEditions(yml: Map<String, Any?>): Map<String, EditionConfig> {
+    private fun parseEditions(yml: Map<String, Any?>): Map<String, EditionOverride> {
         val raw = (yml["editions"] as? Map<String, Any?>) ?: return emptyMap()
-        val result = mutableMapOf<String, EditionConfig>()
+        val result = mutableMapOf<String, EditionOverride>()
         for ((key, value) in raw) {
             val cfg = value as? Map<String, Any?> ?: continue
-            result[key] = EditionConfig(
-                enabled = (cfg["enabled"] as? Boolean) ?: true,
-                host = (cfg["host"] as? String) ?: "0.0.0.0",
-                port = (cfg["port"] as? Number)?.toInt() ?: 25565,
+            result[key] = EditionOverride(
+                enabled = cfg["enabled"] as? Boolean,
+                host = cfg["host"] as? String,
+                port = (cfg["port"] as? Number)?.toInt(),
                 options = cfg.filterKeys { it !in setOf("enabled", "host", "port") },
             )
         }
@@ -110,7 +117,7 @@ object ConfigLoader {
         val w = (yml["world"] as? Map<String, Any?>) ?: emptyMap()
         return WorldConfig(
             name = (w["name"] as? String) ?: props.getProperty("level-name", "world"),
-            seed = (w["seed"] as? String) ?: props.getProperty("level-seed", ""),
+            seed = w["seed"]?.toString() ?: props.getProperty("level-seed", ""),
             gamemode = (w["gamemode"] as? String) ?: props.getProperty("gamemode", "survival"),
             forceGamemode = (w["force-gamemode"] as? Boolean)
                 ?: props.getProperty("force-gamemode", "false").toBoolean(),
@@ -120,20 +127,25 @@ object ConfigLoader {
 
     private fun deepMerge(
         base: Map<String, EditionConfig>,
-        override: Map<String, EditionConfig>,
+        override: Map<String, EditionOverride>,
     ): Map<String, EditionConfig> {
         val result = base.toMutableMap()
         for ((key, overCfg) in override) {
             val baseCfg = result[key]
             result[key] = if (baseCfg != null) {
                 baseCfg.copy(
-                    enabled = overCfg.enabled,
-                    host = overCfg.host,
-                    port = overCfg.port,
+                    enabled = overCfg.enabled ?: baseCfg.enabled,
+                    host = overCfg.host ?: baseCfg.host,
+                    port = overCfg.port ?: baseCfg.port,
                     options = baseCfg.options + overCfg.options,
                 )
             } else {
-                overCfg
+                EditionConfig(
+                    enabled = overCfg.enabled ?: true,
+                    host = overCfg.host ?: "0.0.0.0",
+                    port = overCfg.port ?: 25565,
+                    options = overCfg.options,
+                )
             }
         }
         return result

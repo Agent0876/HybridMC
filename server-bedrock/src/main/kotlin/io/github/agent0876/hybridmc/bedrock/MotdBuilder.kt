@@ -16,9 +16,6 @@ object MotdBuilder {
 
     private const val PROTOCOL_VERSION = 1001     // MCPE protocol for 1.26.32
     private const val GAME_VERSION     = "1.26.32"
-    private const val MAX_PLAYERS      = 200
-    private const val IPV4_PORT        = 19132
-    private const val IPV6_PORT        = 19133
 
     fun build(
         description: String,
@@ -26,19 +23,22 @@ object MotdBuilder {
         worldName: String,
         gameMode: String,
         registry: PlayerRegistry,
+        maxPlayers: Int,
+        port: Int,
+        portv6: Int,
     ): String = buildString {
         append("MCPE")
         append(';').append(description)
         append(';').append(PROTOCOL_VERSION)
         append(';').append(GAME_VERSION)
         append(';').append(registry.onlineCount)
-        append(';').append(MAX_PLAYERS)
+        append(';').append(maxPlayers)
         append(';').append(serverGuid)
         append(';').append(worldName)
         append(';').append(gameMode)
         append(";1")                     // edition: 1 = MCPE
-        append(';').append(IPV4_PORT)
-        append(';').append(IPV6_PORT)
+        append(';').append(port)
+        append(';').append(portv6)
         append(';')
     }
 }

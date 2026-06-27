@@ -27,7 +27,7 @@ class JavaEditionServer(
     private val world: GameWorld,
     private val host: String = "0.0.0.0",
     private val port: Int = 25565,
-    private val maxPlayers: Int = 100,
+    private val maxPlayers: Int = 20,
     private val motd: String = "§aHybridMC §7— Java + Bedrock",
 ) : ServerLifecycle {
 
