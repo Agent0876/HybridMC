@@ -45,14 +45,14 @@ class BedrockPlayerSession(
 
     override val ping: Int get() = connection.ping
 
-    override fun sendMessage(text: String) {
+    override fun sendMessage(message: String) {
         if (loginState != LoginState.LOGGED_IN) return
         val inner = allocator.allocate(256)
         try {
             writeVarInt(inner, 0x09)
             inner.writeUnsignedByte(0)
             inner.writeBoolean(false)
-            writeMcString(inner, text)
+            writeMcString(inner, message)
             writeMcString(inner, "")
             writeMcString(inner, "")
             sendBatch(inner)
@@ -143,6 +143,7 @@ class BedrockPlayerSession(
             0xC1 -> handleRequestNetworkSettings(data)
             0x01 -> handleLogin(data)
             0x09 -> handleTextPacket(data)
+            0x4D -> handleCommandRequest(data)
             else -> {
                 if (loginState == LoginState.LOGGED_IN) {
                     logger.debug("[{}] Unhandled game packet 0x{}", username, packetId.toString(16))
@@ -219,8 +220,15 @@ class BedrockPlayerSession(
         if (data.readableBytes() == 0) return
         val message = readMcString(data)
         logger.info("[BEDROCK] {}: {}", username, message)
-        val json = """{"text":"<${username}> ${escapeJson(message)}","color":"yellow"}"""
-        registry.all().forEach { it.sendMessage(json) }
+        val formatted = "§e<${username}> $message"
+        registry.broadcast(formatted)
+    }
+
+    private fun handleCommandRequest(data: Buffer) {
+        if (loginState != LoginState.LOGGED_IN) return
+        val command = readMcString(data)
+        logger.info("[BEDROCK] {} executed command: {}", username, command)
+        registry.commandManager.execute(this, command)
     }
 
     private fun sendPlayStatus(status: Int) {

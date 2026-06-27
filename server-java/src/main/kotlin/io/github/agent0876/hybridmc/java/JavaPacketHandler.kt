@@ -23,13 +23,37 @@ class JavaPacketHandler(
 
     private var state = State.HANDSHAKING
     private var session: JavaPlayerSession? = null
+    private var cumulation: Buffer? = null
 
     override fun messageReceived(ctx: ChannelHandlerContext, msg: Buffer) {
-        handleRawBytes(ctx, msg)
+        val accum = cumulation ?: ctx.bufferAllocator().allocate(128).also { cumulation = it }
+        
+        accum.ensureWritable(msg.readableBytes())
+        msg.copyInto(msg.readerOffset(), accum, accum.writerOffset(), msg.readableBytes())
+        accum.writerOffset(accum.writerOffset() + msg.readableBytes())
+
+        handleRawBytes(ctx, accum)
+
+        val currentAccum = cumulation
+        if (currentAccum != null) {
+            if (currentAccum.readableBytes() == 0) {
+                currentAccum.close()
+                cumulation = null
+            } else if (currentAccum.readerOffset() > 1024) {
+                val remaining = currentAccum.readableBytes()
+                val temp = ctx.bufferAllocator().allocate(remaining)
+                currentAccum.copyInto(currentAccum.readerOffset(), temp, 0, remaining)
+                temp.writerOffset(remaining)
+                currentAccum.close()
+                cumulation = temp
+            }
+        }
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         session?.let { registry.leave(it) }
+        cumulation?.close()
+        cumulation = null
         super.channelInactive(ctx)
     }
 
@@ -330,26 +354,15 @@ class JavaPacketHandler(
         val message = data.readMcString()
         val username = session?.username ?: "?"
         logger.info("[{}] {}", username, message)
-        val response = """{"text":"<${username}> ${escapeJson(message)}","color":"white"}"""
-        broadcastChat(response)
+        val formatted = "<$username> $message"
+        registry.broadcast(formatted)
     }
 
     private fun handleChatCommand(ctx: ChannelHandlerContext, data: Buffer) {
         val command = data.readMcString()
-        val username = session?.username ?: "?"
-        logger.info("[{}] /{}", username, command)
-        val response = """{"text":"<${username}> /${escapeJson(command)}","color":"gray"}"""
-        broadcastChat(response)
-    }
-
-    private fun broadcastChat(json: String) {
-        registry.all().forEach { player ->
-            if (player is JavaPlayerSession && player != session) {
-                player.sendRaw(json)
-            } else {
-                player.sendMessage(json)
-            }
-        }
+        val sess = session ?: return
+        logger.info("[{}] /{}", sess.username, command)
+        registry.commandManager.execute(sess, command)
     }
 
     private fun handleClientInformation(data: Buffer) {

@@ -1,5 +1,6 @@
 package io.github.agent0876.hybridmc.core.player
 
+import io.github.agent0876.hybridmc.core.command.CommandSender
 import java.util.UUID
 
 /**
@@ -8,7 +9,9 @@ import java.util.UUID
  * Both [Edition.JAVA] and [Edition.BEDROCK] players implement this interface so that
  * game logic in [server-core] and [GameWorld] can treat all players uniformly.
  */
-interface HybridPlayer {
+interface HybridPlayer : CommandSender {
+
+    override val name: String get() = username
 
     /** Unique player identifier (randomly generated per session if not authenticated). */
     val uuid: UUID
@@ -26,7 +29,7 @@ interface HybridPlayer {
      * Sends a plain-text chat message to this player.
      * Implementations must handle edition-specific formatting internally.
      */
-    fun sendMessage(text: String)
+    override fun sendMessage(message: String)
 
     /**
      * Disconnects this player with a human-readable [reason].

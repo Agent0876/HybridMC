@@ -24,8 +24,8 @@ class JavaPlayerSession(
     val remoteAddress: InetSocketAddress
         get() = ctx.channel().remoteAddress() as InetSocketAddress
 
-    override fun sendMessage(text: String) {
-        val json = """{"text":"${escapeJson(text)}","color":"white"}"""
+    override fun sendMessage(message: String) {
+        val json = """{"text":"${escapeJson(message)}"}"""
         sendRaw(json)
     }
 

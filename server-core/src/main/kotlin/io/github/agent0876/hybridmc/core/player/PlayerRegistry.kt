@@ -1,5 +1,6 @@
 package io.github.agent0876.hybridmc.core.player
 
+import io.github.agent0876.hybridmc.core.command.CommandManager
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -11,6 +12,8 @@ import java.util.concurrent.ConcurrentHashMap
  * cross-edition features (broadcasting, player count, etc.) work transparently.
  */
 class PlayerRegistry {
+
+    lateinit var commandManager: CommandManager
 
     private val logger = LoggerFactory.getLogger(PlayerRegistry::class.java)
 

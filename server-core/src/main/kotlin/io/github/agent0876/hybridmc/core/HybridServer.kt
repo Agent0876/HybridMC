@@ -1,5 +1,6 @@
 package io.github.agent0876.hybridmc.core
 
+import io.github.agent0876.hybridmc.core.command.CommandManager
 import io.github.agent0876.hybridmc.core.player.Edition
 import io.github.agent0876.hybridmc.core.player.PlayerRegistry
 import io.github.agent0876.hybridmc.core.world.GameWorld
@@ -26,6 +27,10 @@ import org.slf4j.LoggerFactory
 class HybridServer(
     val playerRegistry: PlayerRegistry = PlayerRegistry(),
 ) {
+    init {
+        playerRegistry.commandManager = CommandManager(playerRegistry) { stop() }
+    }
+
     private val logger = LoggerFactory.getLogger(HybridServer::class.java)
 
     val world: GameWorld = GameWorld(registry = playerRegistry)

@@ -23,9 +23,9 @@ object MotdBuilder {
         worldName: String,
         gameMode: String,
         registry: PlayerRegistry,
-        maxPlayers: Int,
-        port: Int,
-        portv6: Int,
+        maxPlayers: Int = 200,
+        port: Int = 19132,
+        portv6: Int = 19133,
     ): String = buildString {
         append("MCPE")
         append(';').append(description)

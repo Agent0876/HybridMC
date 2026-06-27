@@ -11,8 +11,8 @@ class TestPlayer(
     var lastMessage: String? = null
     var disconnected = false
 
-    override fun sendMessage(text: String) {
-        lastMessage = text
+    override fun sendMessage(message: String) {
+        lastMessage = message
     }
 
     override fun disconnect(reason: String) {
